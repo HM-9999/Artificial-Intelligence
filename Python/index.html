@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>HIDEKIのAIチャット</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #3d3d3d; }
+    #chat { max-width: 600px; margin: auto; }
+    .bubble { padding: 10px; margin: 5px; border-radius: 10px; }
+    .user { background: #0b93f6; color: white; text-align: right; }
+    .bot { background: #ffffff; color: black; text-align: left; }
+  </style>
+</head>
+<body>
+  <div id="chat"></div>
+  <input id="input" type="text" placeholder="メッセージを入力..." style="width: 80%;">
+  <button onclick="send()">送信</button>
+
+  <script>
+    async function send() {
+      let input = document.getElementById("input").value;
+      if (!input) return;
+      document.getElementById("chat").innerHTML += `<div class="bubble user">${input}</div>`;
+
+      let res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: input })
+      });
+      let data = await res.json();
+      document.getElementById("chat").innerHTML += `<div class="bubble bot">${data.reply}</div>`;
+      document.getElementById("input").value = "";
+    }
+  </script>
+</body>
+</html>
