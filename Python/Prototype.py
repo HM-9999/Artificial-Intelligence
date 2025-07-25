@@ -1,17 +1,14 @@
-import json
-import gradio as gr
+import openai
 
-# JSONファイルを読み込む
-with open("conversation_data.json", encoding="utf-8") as f:
-    conversations = json.load(f)
+openai.api_key = "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"
+openai.api_base = "https://openrouter.ai/openai/gpt-4o"
 
-# 会話応答関数
-def chat(input_text):
-    for pair in conversations:
-        if pair["input"].strip() == input_text.strip():
-            return pair["output"]
-    return "すみません、うまく答えられません。"
+response = openai.ChatCompletion.create(
+    model="mistralai/mistral-7b-instruct",  # 無料モデル
+    messages=[
+        {"role": "system", "content": "あなたは親切なAIです。"},
+        {"role": "user", "content": "地球はなぜ青いの？"}
+    ]
+)
 
-# Gradio UI
-iface = gr.Interface(fn=chat, inputs="text", outputs="text", title="HIDEKIの会話AI（JSON版）")
-iface.launch()
+print(response["choices"][0]["message"]["content"])
