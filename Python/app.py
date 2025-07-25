@@ -25,11 +25,10 @@ HTML = """
   </form>
 
   {% if answers %}
-    <h2>回答候補（{{ answers|length }}件）</h2>
+    <h2>回答</h2>
     {% for qa in answers %}
       <div class="answer">
-        <strong>質問：</strong> {{ qa['question'] }}<br>
-        <strong>回答：</strong> {{ qa['answer'] }}
+        {{ qa['answer'] }}
       </div>
     {% endfor %}
   {% endif %}
@@ -44,12 +43,17 @@ def index():
     if request.method == "POST":
         question = request.form.get("question", "").strip()
         if question:
-            # 簡単なキーワード検索を使う（search_qa）
-            answers = analyzer.search_qa(question)
-            if not answers:
-                # 見つからなければ類似質問も探してみる
+            # キーワード検索で最初の1件のみ
+            search_results = analyzer.search_qa(question)
+            if search_results:
+                answers = [search_results[0]]
+            else:
+                # 類似質問の最上位1件のみ
                 similar = analyzer.find_similar_questions(question)
-                answers = [qa for qa, sim in similar]
+                if similar:
+                    answers = [similar[0][0]]
+                else:
+                    answers = []
     return render_template_string(HTML, question=question, answers=answers)
 
 if __name__ == "__main__":

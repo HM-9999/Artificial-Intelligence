@@ -4,6 +4,29 @@ from collections import Counter, defaultdict
 from datetime import datetime
 import re
 from typing import List, Dict, Optional, Tuple
+# 追加: ベクトル化用
+from sentence_transformers import SentenceTransformer
+import numpy as np
+# 追加: janomeによる形態素解析
+from janome.tokenizer import Tokenizer
+
+# 類義語・関連語の辞書
+SYNONYM_DICT = {
+    "部活": ["クラブ", "サークル", "課外活動"],
+    "慶應": ["慶應義塾", "慶應大学", "Keio"],
+    # 必要に応じて追加
+}
+
+def tokenize(text):
+    t = Tokenizer()
+    return [token.surface for token in t.tokenize(text)]
+
+def expand_words(words, synonym_dict):
+    expanded = set(words)
+    for word in words:
+        if word in synonym_dict:
+            expanded.update(synonym_dict[word])
+    return list(expanded)
 
 class KeioQAAnalyzer:
     """慶應義塾Q&Aデータの分析・検索・実行ツール"""
@@ -13,6 +36,9 @@ class KeioQAAnalyzer:
         self.qa_data = []
         self.meta_info = {}
         self.load_data()
+        # 追加: モデルとベクトル化（ローカル保存モデルを利用）
+        self.model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2-local')  # ローカルパスに変更
+        self.question_embeddings = self._embed_all_questions()
     
     def load_data(self):
         """Q&Aデータファイルを読み込む"""
@@ -30,7 +56,15 @@ class KeioQAAnalyzer:
             print(f"JSONファイル読み込みエラー: {e}")
             self.qa_data = []
             self.meta_info = {}
-    
+
+    def _embed_all_questions(self):
+        """全質問文をベクトル化して保存"""
+        if not self.qa_data:
+            return np.array([])
+        questions = [qa['question'] for qa in self.qa_data]
+        embeddings = self.model.encode(questions, convert_to_numpy=True)
+        return embeddings
+
     def get_basic_stats(self) -> Dict:
         """基本統計情報を取得"""
         if not self.qa_data:
@@ -70,9 +104,16 @@ class KeioQAAnalyzer:
     
     def search_qa(self, query: str, category: str = None, 
                   difficulty: str = None, tags: List[str] = None) -> List[Dict]:
-        """Q&Aを検索"""
+        """Q&Aを検索（単語分割＋類義語拡張対応）"""
         results = []
-        query_lower = query.lower() if query else ""
+        # 追加: クエリを単語分割＋拡張
+        if query:
+            words = tokenize(query)
+            expanded_words = expand_words(words, SYNONYM_DICT)
+            expanded_query = " ".join(expanded_words)
+            query_lower = expanded_query.lower()
+        else:
+            query_lower = ""
         
         for qa in self.qa_data:
             # キーワード検索
@@ -98,24 +139,22 @@ class KeioQAAnalyzer:
         return results
     
     def find_similar_questions(self, target_question: str, limit: int = 5) -> List[Tuple[Dict, float]]:
-        """類似質問を検索（簡単な文字列マッチングベース）"""
-        target_words = set(re.findall(r'\w+', target_question.lower()))
-        similarities = []
-        
-        for qa in self.qa_data:
-            qa_words = set(re.findall(r'\w+', qa['question'].lower()))
-            
-            # Jaccard係数で類似度計算
-            intersection = len(target_words & qa_words)
-            union = len(target_words | qa_words)
-            similarity = intersection / union if union > 0 else 0
-            
-            if similarity > 0:
-                similarities.append((qa, similarity))
-        
-        # 類似度でソート
-        similarities.sort(key=lambda x: x[1], reverse=True)
-        return similarities[:limit]
+        """ベクトル化による意味ベースの類似質問検索（単語分割＋類義語拡張対応）"""
+        if not self.qa_data or self.question_embeddings.shape[0] == 0:
+            return []
+        # 追加: クエリを単語分割＋拡張
+        words = tokenize(target_question)
+        expanded_words = expand_words(words, SYNONYM_DICT)
+        expanded_question = " ".join(expanded_words)
+        # 入力質問をベクトル化
+        target_emb = self.model.encode([expanded_question], convert_to_numpy=True)[0]
+        # コサイン類似度計算
+        similarities = np.dot(self.question_embeddings, target_emb) / (
+            np.linalg.norm(self.question_embeddings, axis=1) * np.linalg.norm(target_emb) + 1e-8)
+        # 上位N件を取得
+        top_idx = similarities.argsort()[::-1][:limit]
+        results = [(self.qa_data[i], float(similarities[i])) for i in top_idx]
+        return results
     
     def get_category_analysis(self) -> Dict:
         """カテゴリ別の詳細分析"""
