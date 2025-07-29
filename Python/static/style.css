@@ -1,0 +1,345 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    background: #000000;
+    color: #ffffff;
+    line-height: 1.6;
+    overflow: hidden;
+}
+
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 100%;
+}
+
+/* ヘッダー */
+.chat-header {
+    background: #111111;
+    border-bottom: 1px solid #333333;
+    padding: 1.5rem 2rem;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+    position: relative;
+}
+
+.chat-header h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.025em;
+}
+
+.chat-header p {
+    font-size: 0.875rem;
+    color: #888888;
+    margin-bottom: 1rem;
+}
+
+.clear-button {
+    background: #222222;
+    color: #cccccc;
+    border: 1px solid #444444;
+    border-radius: 0.75rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.clear-button:hover {
+    background: #333333;
+    color: #ffffff;
+    border-color: #555555;
+    transform: translateY(-1px);
+}
+
+.clear-button:active {
+    transform: translateY(0);
+}
+
+/* チャットメッセージエリア */
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 0;
+    background: #000000;
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: #111111;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #333333;
+    border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #444444;
+}
+
+/* メッセージスタイル */
+.message {
+    padding: 1.5rem 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.message-content {
+    max-width: 768px;
+    margin: 0 auto;
+}
+
+.user-message {
+    background: #000000;
+}
+
+.user-message .message-content {
+    background: linear-gradient(135deg, #333333 0%, #222222 100%);
+    color: #ffffff;
+    padding: 1.25rem 1.75rem;
+    border-radius: 1.25rem 1.25rem 0.5rem 1.25rem;
+    margin-left: auto;
+    max-width: 80%;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    border: 1px solid #444444;
+}
+
+.ai-message {
+    background: #000000;
+}
+
+.ai-message .message-content {
+    background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+    color: #e5e5e5;
+    padding: 1.25rem 1.75rem;
+    border-radius: 1.25rem 1.25rem 1.25rem 0.5rem;
+    border: 1px solid #333333;
+    max-width: 80%;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.error-message {
+    background: #000000;
+}
+
+.error-message .message-content {
+    background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+    color: #ff6b6b;
+    padding: 1.25rem 1.75rem;
+    border-radius: 1rem;
+    max-width: 80%;
+    margin: 0 auto;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    border: 1px solid #444444;
+}
+
+/* メッセージ内のテキスト */
+.message-content p {
+    margin-bottom: 0.75rem;
+    line-height: 1.7;
+    font-size: 0.95rem;
+}
+
+.message-content p:last-child {
+    margin-bottom: 0;
+}
+
+/* 回答テキスト（改行対応） */
+.answer-text {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* 画像表示 */
+.answer-image {
+    margin: 1rem 0;
+    text-align: center;
+}
+
+.answer-image img {
+    max-width: 100%;
+    max-height: 400px;
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    border: 1px solid #333333;
+    transition: transform 0.3s ease;
+}
+
+.answer-image img:hover {
+    transform: scale(1.02);
+}
+
+/* 回答メタデータ */
+.answer-meta {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #333333;
+}
+
+.category {
+    background: rgba(255, 255, 255, 0.1);
+    color: #cccccc;
+    padding: 0.375rem 1rem;
+    border-radius: 1.25rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* 入力エリア */
+.chat-input-container {
+    background: #111111;
+    border-top: 1px solid #333333;
+    padding: 1.5rem 2rem;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.chat-form {
+    max-width: 768px;
+    margin: 0 auto;
+}
+
+.input-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    background: #1a1a1a;
+    border: 2px solid #333333;
+    border-radius: 1.25rem;
+    padding: 1rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    transition: all 0.3s ease;
+}
+
+.input-wrapper:focus-within {
+    border-color: #666666;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05), 0 4px 20px rgba(0, 0, 0, 0.4);
+    transform: translateY(-2px);
+}
+
+textarea {
+    flex: 1;
+    border: none;
+    outline: none;
+    resize: none;
+    font-family: inherit;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: #ffffff;
+    background: transparent;
+    min-height: 28px;
+    max-height: 120px;
+    padding: 0;
+}
+
+textarea::placeholder {
+    color: #666666;
+}
+
+.send-button {
+    background: linear-gradient(135deg, #444444 0%, #333333 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 0.75rem;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.send-button:hover {
+    background: linear-gradient(135deg, #555555 0%, #444444 100%);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.send-button:active {
+    transform: translateY(0) scale(0.95);
+}
+
+.send-button svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* レスポンシブデザイン */
+@media (max-width: 768px) {
+    .chat-header {
+        padding: 1rem;
+    }
+    
+    .chat-header h1 {
+        font-size: 1.5rem;
+    }
+    
+    .message {
+        padding: 1rem 1.5rem;
+    }
+    
+    .user-message .message-content,
+    .ai-message .message-content {
+        max-width: 90%;
+        padding: 1rem 1.5rem;
+    }
+    
+    .chat-input-container {
+        padding: 1rem 1.5rem;
+    }
+    
+    .input-wrapper {
+        padding: 0.875rem;
+    }
+    
+    .send-button {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .clear-button {
+        padding: 0.5rem 1rem;
+        font-size: 0.8rem;
+    }
+    
+    .answer-image img {
+        max-height: 300px;
+    }
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message {
+    animation: fadeIn 0.3s ease-out;
+} 

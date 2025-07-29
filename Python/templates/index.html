@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>慶應義塾初等部 Q&A システム</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="chat-container">
+        <!-- ヘッダー -->
+        <div class="chat-header">
+            <h1>慶應義塾初等部 Q&A システム</h1>
+            <p>初等部について、何でもお聞きください</p>
+            <button id="clearHistory" class="clear-button">履歴をクリア</button>
+        </div>
+
+        <!-- チャット履歴エリア -->
+        <div class="chat-messages" id="chatMessages">
+            {% if error and not chat_history %}
+                <div class="message error-message">
+                    <div class="message-content">
+                        <h3>エラーが発生しました</h3>
+                        <p>{{ error }}</p>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- チャット履歴の表示 -->
+            {% for conversation in chat_history %}
+                <!-- ユーザーの質問 -->
+                <div class="message user-message">
+                    <div class="message-content">
+                        <p>{{ conversation.question }}</p>
+                    </div>
+                </div>
+
+                <!-- AIの回答 -->
+                <div class="message ai-message">
+                    <div class="message-content">
+                        {% if conversation.error %}
+                            <p>{{ conversation.error }}</p>
+                        {% elif conversation.answer %}
+                            <p class="answer-text">{{ conversation.answer.answer }}</p>
+                            
+                            <!-- 画像表示 -->
+                            {% if conversation.answer.get('image_url') %}
+                                <div class="answer-image">
+                                    <img src="{{ conversation.answer.image_url }}" alt="回答に関連する画像" loading="lazy">
+                                </div>
+                            {% endif %}
+                            
+                            {% if conversation.answer.get('category') %}
+                                <div class="answer-meta">
+                                    <span class="category">カテゴリ: {{ conversation.answer.category }}</span>
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <p>申し訳ございません。該当する回答が見つかりませんでした。<br>別の質問を試してみてください。</p>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- 入力エリア -->
+        <div class="chat-input-container">
+            <form method="post" id="questionForm" class="chat-form">
+                <div class="input-wrapper">
+                    <textarea 
+                        name="question" 
+                        id="question" 
+                        placeholder="初等部について質問してください..."
+                        required></textarea>
+                    <button type="submit" class="send-button">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Enterキーでフォーム送信
+        document.getElementById('question').addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                document.getElementById('questionForm').submit();
+            }
+        });
+
+        // ページ読み込み時にテキストエリアにフォーカス
+        window.addEventListener('load', function() {
+            document.getElementById('question').focus();
+            
+            // チャット履歴を最下部にスクロール
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+
+        // フォーム送信後に自動スクロール
+        document.getElementById('questionForm').addEventListener('submit', function() {
+            setTimeout(function() {
+                const chatMessages = document.getElementById('chatMessages');
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 100);
+        });
+
+        // 履歴クリア機能
+        document.getElementById('clearHistory').addEventListener('click', function() {
+            if (confirm('チャット履歴をすべて削除しますか？')) {
+                fetch('/clear', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                }).then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        location.reload();
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html> 
