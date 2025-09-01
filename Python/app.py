@@ -71,7 +71,7 @@ def get_chat_history():
         session['chat_history'] = []
     return session['chat_history']
 
-def add_to_chat_history(question, answer, error=None):
+def add_to_chat_history(question, answer, vectors=None):
     """チャット履歴に追加"""
     chat_history = get_chat_history()
     
@@ -81,7 +81,7 @@ def add_to_chat_history(question, answer, error=None):
         'timestamp': datetime.now().isoformat(),
         'question': question,
         'answer': answer,
-        'error': error
+        'vectors': vectors or {}
     }
     
     chat_history.append(conversation)
@@ -117,31 +117,44 @@ def index():
     error = None
     
     if request.method == "POST":
-        current_question = request.form.get("question", "").strip()
+        current_question = ""
+        # JSONリクエストとフォームリクエストの両方に対応
+        if request.is_json:
+            data = request.get_json()
+            current_question = data.get('message', '').strip()
+        else:
+            current_question = request.form.get("question", "").strip()
+
         if current_question:
             try:
-                # キーワード検索を優先し、結果が見つからない場合のみ類似質問検索
+                current_answer_text = "申し訳ありません、その質問にはお答えできません。"
+                
+                # キーワード検索
                 search_results = analyzer.search_qa(current_question)
                 if search_results:
-                    # キーワード検索で結果が見つかった場合
-                    current_answer = search_results[0]
+                    current_answer_text = search_results[0]['answer']
                 else:
-                    # キーワード検索で結果が見つからない場合、類似質問検索
+                    # 類似質問検索
                     similar = analyzer.find_similar_questions(current_question)
                     if similar:
-                        current_answer = similar[0][0]
-                    else:
-                        # どちらも見つからない場合
-                        current_answer = None
+                        current_answer_text = similar[0][0]['answer']
                 
+                # 単語ベクトルを生成
+                raw_vectors = analyzer.vectorize_words(current_question)
+                # JSONシリアライズ可能な形式に変換
+                vectors = {word: vec.tolist() for word, vec in raw_vectors.items()}
+
                 # チャット履歴に追加
-                add_to_chat_history(current_question, current_answer, error)
+                add_to_chat_history(current_question, current_answer_text, vectors)
                 
             except Exception as e:
-                error = f"検索中にエラーが発生しました: {str(e)}"
-                add_to_chat_history(current_question, None, error)
-        else:
-            error = "質問を入力してください"
+                error_message = f"検索中にエラーが発生しました: {str(e)}"
+                flash(error_message, 'error')
+                # エラーが発生した場合も、ユーザーの質問を履歴に追加
+                add_to_chat_history(current_question, "エラーが発生しました。詳細は管理者にご確認ください。")
+
+    # セッションからチャット履歴を取得
+    chat_history = session.get('chat_history', [])
     
     return render_template('index.html', 
                          chat_history=chat_history,
