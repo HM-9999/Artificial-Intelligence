@@ -54,6 +54,14 @@ def initialize_app():
         if not analyzer.qa_data:
             print("Q&Aデータの読み込みに失敗しました")
             return None
+
+        # 未回答の質問に回答を生成
+        try:
+            generated_count = analyzer.generate_answers_for_unanswered()
+            if generated_count > 0:
+                print(f"*** {generated_count}件の新しいQ&Aを自動生成しました ***")
+        except Exception as e:
+            print(f"回答の自動生成中にエラーが発生しました: {e}")
         
         print("アプリケーションの初期化が完了しました")
         return analyzer
@@ -65,31 +73,16 @@ def initialize_app():
 # グローバル変数としてアナライザーを保持
 analyzer = initialize_app()
 
-def get_chat_history():
-    """チャット履歴を取得"""
-    if 'chat_history' not in session:
-        session['chat_history'] = []
-    return session['chat_history']
+chat_history = []
 
-def add_to_chat_history(question, answer):
-    """チャット履歴に追加"""
-    chat_history = get_chat_history()
-    
-    # 新しい会話を追加
-    conversation = {
-        'id': str(uuid.uuid4()),
-        'timestamp': datetime.now().isoformat(),
-        'question': question,
-        'answer': answer
-    }
-    
-    chat_history.append(conversation)
-    
-    # 履歴が多すぎる場合は古いものを削除（最新50件を保持）
-    if len(chat_history) > 50:
-        chat_history = chat_history[-50:]
-    
-    session['chat_history'] = chat_history
+def get_chat_history():
+    return chat_history
+
+def add_to_chat_history(question, answer, learned=False):
+    chat_history.append({'question': question, 'answer': answer, 'learned': learned})
+
+def clear_chat_history():
+    chat_history.clear()
 
 @app.route('/')
 def root():
@@ -102,7 +95,8 @@ def index():
     """メインページ（チャット）"""
     global analyzer
     
-    if 'user_id' not in session:
+    # JSONリクエスト（API経由）の場合はログインチェックをスキップ
+    if not request.is_json and 'user_id' not in session:
         flash('チャットを利用するにはログインが必要です。')
         return redirect(url_for('login'))
 
@@ -112,7 +106,6 @@ def index():
                             error="システムの初期化に失敗しました。必要なファイルを確認してください。",
                             chat_history=[])
     
-    chat_history = get_chat_history()
     error = None
     
     if request.method == "POST":
@@ -126,8 +119,21 @@ def index():
 
         if current_question:
             try:
-                current_answer_text = "申し訳ありません、その質問にはお答えできません。"
-                
+                # チャット履歴で類似質問をチェック
+                for chat in reversed(chat_history):
+                    similarity = analyzer.get_similarity(current_question, chat['question'])
+                    if similarity > 0.9:
+                        return jsonify({
+                            'question': current_question,
+                            'answer': f"「{chat['question']}」という類似のご質問に先ほど回答しました。ご確認いただけますか？",
+                            'predicted_questions': [],
+                            'learned': False
+                        })
+
+                current_answer_text = None
+                predicted_questions = []
+                learned_new_question = False
+
                 # キーワード検索
                 search_results = analyzer.search_qa(current_question)
                 if search_results:
@@ -137,15 +143,25 @@ def index():
                     similar = analyzer.find_similar_questions(current_question)
                     if similar:
                         current_answer_text = similar[0][0]['answer']
-                
+                    else:
+                        analyzer.learn_new_qa(current_question)
+                        learned_new_question = True
+                        current_answer_text = "ご質問ありがとうございます。関連する回答が見つかりませんでした。この質問を学習し、次回から回答できるように改善します。"
+
+                # 次の質問を予測
+                predicted_questions = analyzer.predict_next_questions(current_question)
+
                 # チャット履歴に追加
-                add_to_chat_history(current_question, current_answer_text)
-                
+                add_to_chat_history(current_question, current_answer_text, learned_new_question)
+
                 # フロントエンドに返すJSONを作成
                 return jsonify({
-                    'answer': current_answer_text
+                    'question': current_question,
+                    'answer': current_answer_text,
+                    'predicted_questions': predicted_questions,
+                    'learned': learned_new_question
                 })
-                
+
             except Exception as e:
                 error_message = f"検索中にエラーが発生しました: {str(e)}"
                 print(f"!!! エラー発生: {error_message}")
@@ -156,8 +172,6 @@ def index():
                 return jsonify({'error': 'サーバーでエラーが発生しました。'}), 500
 
     # GETリクエストの場合、またはPOSTで質問がない場合はページを普通に表示
-    chat_history = get_chat_history()
-    
     return render_template('index.html', 
                          chat_history=chat_history,
                          error=error)
@@ -217,7 +231,7 @@ def logout():
 @app.route("/clear", methods=["POST"])
 def clear_history():
     """チャット履歴をクリア"""
-    session.pop('chat_history', None)
+    clear_chat_history()
     return {'status': 'success'}
 
 @app.route("/health")

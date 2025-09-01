@@ -21,49 +21,23 @@
         </header>
 
         <div class="chat-messages">
-            {% if error %}
-                <div class="message error-message">
+            {% for chat in chat_history %}
+                <div class="message user-message">
                     <div class="message-content">
-                        <p class="answer-text">{{ error }}</p>
+                        <p>{{ chat.question }}</p>
                     </div>
                 </div>
-            {% endif %}
-
-            {% for chat in chat_history %}
-                {% if chat.question %}
-                    <div class="message user-message">
-                        <div class="message-content">
-                            <p class="answer-text">{{ chat.question }}</p>
-                        </div>
+                <div class="message ai-message">
+                    <div class="message-content">
+                        <p class="answer-text">{{ chat.answer | safe }}</p>
                     </div>
-                {% endif %}
-                
-                {% if chat.answer %}
-                    <div class="message ai-message">
-                        <div class="message-content">
-                            <div class="answer-text">{{ chat.answer.answer | safe }}</div>
-                            {% if chat.answer.image %}
-                                <div class="answer-image">
-                                    <img src="{{ url_for('static', filename='images/' + chat.answer.image) }}" alt="関連画像">
-                                </div>
-                            {% endif %}
-                            <div class="answer-meta">
-                                <span class="category">{{ chat.answer.category }}</span>
-                            </div>
-                        </div>
+                </div>
+                {% if chat.learned %}
+                <div class="message system-message">
+                    <div class="message-content">
+                        <p> 新しい質問を学習しました！</p>
                     </div>
-                {% elif chat.error %}
-                    <div class="message error-message">
-                        <div class="message-content">
-                            <p class="answer-text">{{ chat.error }}</p>
-                        </div>
-                    </div>
-                {% elif not chat.answer and not chat.error and chat.question %}
-                     <div class="message ai-message">
-                        <div class="message-content">
-                            <p class="answer-text">すみません、その質問にはお答えできません。</p>
-                        </div>
-                    </div>
+                </div>
                 {% endif %}
             {% endfor %}
             <div id="typing-indicator" class="message ai-message" style="display: none;">
@@ -74,6 +48,7 @@
         </div>
 
         <div class="chat-input-container">
+            <div class="suggested-questions"></div>
             <form class="chat-form" method="post">
                 <div class="input-wrapper">
                     <textarea 
@@ -113,19 +88,20 @@
         });
 
         function sendMessage() {
-            const form = document.querySelector('.chat-form');
-            const input = form.querySelector('textarea[name="question"]');
+            const input = document.querySelector('textarea[name="question"]');
             const question = input.value.trim();
+            if (question === '') return;
 
-            if (!question) return;
-
-            // ユーザーの質問をチャットに追加
-            addMessage(question, 'user');
+            const chatMessages = document.querySelector('.chat-messages');
+            
+            // 入力欄をクリアし、サジェストを消す
             input.value = '';
             autoResize(input);
+            clearSuggestedQuestions();
 
             // タイピングインジケーターを表示
             document.getElementById('typing-indicator').style.display = 'flex';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
 
             fetch('/chat', {
                 method: 'POST',
@@ -137,43 +113,90 @@
             .then(response => response.json())
             .then(data => {
                 document.getElementById('typing-indicator').style.display = 'none';
+
+                // ユーザーの質問とAIの回答をまとめて追加
+                let messagesHtml = '';
+
+                // ユーザーの質問
+                messagesHtml += `
+                    <div class="message user-message">
+                        <div class="message-content">
+                            <p>${question}</p>
+                        </div>
+                    </div>`;
+
+                // AIの回答
                 if (data.answer) {
-                    addMessage(data, 'ai'); // データオブジェクト全体を渡す
+                    const answerText = data.answer;
+                    messagesHtml += `
+                        <div class="message ai-message">
+                            <div class="message-content">
+                                <p class="answer-text">${answerText.replace(/\n/g, '<br>')}</p>
+                            </div>
+                        </div>`;
+                    
+                    if (data.learned) {
+                        messagesHtml += `
+                        <div class="message system-message">
+                            <div class="message-content">
+                                <p> 新しい質問を学習しました！</p>
+                            </div>
+                        </div>`;
+                    }
+
+                    if (data.predicted_questions && data.predicted_questions.length > 0) {
+                        displaySuggestedQuestions(data.predicted_questions);
+                    }
                 } else if (data.error) {
-                    addMessage({ answer: data.error, vectors: {} }, 'ai');
+                    messagesHtml += `
+                        <div class="message ai-message">
+                            <div class="message-content">
+                                <p class="answer-text">${data.error}</p>
+                            </div>
+                        </div>`;
                 }
+                
+                chatMessages.insertAdjacentHTML('beforeend', messagesHtml);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             })
             .catch(error => {
                 document.getElementById('typing-indicator').style.display = 'none';
-                addMessage({ answer: 'フロントエンドでエラーが発生しました。', vectors: {} }, 'ai');
-                console.error('Fetch Error:', error);
+                const errorHtml = `
+                    <div class="message user-message">
+                        <div class="message-content">
+                            <p>${question}</p>
+                        </div>
+                    </div>
+                    <div class="message ai-message">
+                        <div class="message-content">
+                            <p class="answer-text">エラーが発生しました。しばらくしてからもう一度お試しください。</p>
+                        </div>
+                    </div>`;
+                chatMessages.insertAdjacentHTML('beforeend', errorHtml);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                console.error('Error:', error);
             });
         }
 
-        function addMessage(content, type) {
-            const chatMessages = document.querySelector('.chat-messages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}-message`;
+        function displaySuggestedQuestions(questions) {
+            const container = document.querySelector('.suggested-questions');
+            clearSuggestedQuestions();
+            questions.forEach(q => {
+                const button = document.createElement('button');
+                button.className = 'suggested-question';
+                button.textContent = q;
+                button.onclick = () => {
+                    const input = document.querySelector('textarea[name="question"]');
+                    input.value = q;
+                    sendMessage();
+                };
+                container.appendChild(button);
+            });
+        }
 
-            let html = '';
-            if (type === 'user') {
-                html = `
-                    <div class="message-content">
-                        <p class="answer-text">${content}</p>
-                    </div>`;
-            } else { // AI or error
-                html = `
-                    <div class="message-content">
-                        <div class="answer-text">${content.answer.replace(/\n/g, '<br>')}</div>
-                    </div>`;
-            }
-            messageDiv.innerHTML = html;
-
-            // インジケーターの前に挿入
-            const indicator = document.getElementById('typing-indicator');
-            chatMessages.insertBefore(messageDiv, indicator);
-
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+        function clearSuggestedQuestions() {
+            const container = document.querySelector('.suggested-questions');
+            container.innerHTML = '';
         }
 
         window.addEventListener('load', function() {

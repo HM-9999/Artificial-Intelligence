@@ -4,7 +4,7 @@ from collections import Counter, defaultdict
 from datetime import datetime
 import re
 from typing import List, Dict, Optional, Tuple
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, util
 import numpy as np
 from janome.tokenizer import Tokenizer
 from download_model import load_model
@@ -60,7 +60,8 @@ class KyesTriviaAIAnalyzer:
         if self.model is None:
             raise RuntimeError("モデルの読み込みに失敗しました。download_model.pyを実行してください。")
         self.question_embeddings = self._embed_all_questions()
-    
+        self.unanswered_file = os.path.join(os.path.dirname(__file__), 'unanswered_questions.json')
+
     def load_data(self):
         try:
             with open(self.data_file, 'r', encoding='utf-8') as f:
@@ -227,6 +228,51 @@ class KyesTriviaAIAnalyzer:
             if qa['id'] == qa_id:
                 return qa
         return None
+
+    def _load_unanswered_questions(self):
+        if os.path.exists(self.unanswered_file):
+            with open(self.unanswered_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return []
+
+    def _save_unanswered_questions(self, questions):
+        with open(self.unanswered_file, 'w', encoding='utf-8') as f:
+            json.dump(questions, f, indent=2, ensure_ascii=False)
+
+    def learn_new_qa(self, question):
+        unanswered = self._load_unanswered_questions()
+        # 既に同じ質問がないかチェック
+        if not any(item['question'] == question for item in unanswered):
+            unanswered.append({"question": question, "answer": ""})
+            self._save_unanswered_questions(unanswered)
+
+    def get_similarity(self, text1, text2):
+        embeddings = self.model.encode([text1, text2], convert_to_tensor=True)
+        return util.cos_sim(embeddings[0], embeddings[1]).item()
+
+    def predict_next_questions(self, question: str, limit: int = 3) -> List[str]:
+        """現在の質問に関連する次の質問を予測する"""
+        if not self.qa_data:
+            return []
+
+        # 現在の質問からキーワードを抽出
+        processed_question = preprocess_text(question)
+        words = tokenize(processed_question)
+        
+        if not words:
+            return []
+
+        # 関連タグを持つ質問を収集
+        related_questions = []
+        for qa in self.qa_data:
+            qa_tags = qa.get('tags', [])
+            # 質問文自体が類似していないか、かつタグが関連しているか
+            if question != qa['question'] and any(word in qa_tags for word in words):
+                related_questions.append(qa['question'])
+        
+        # 重複を除いて返す
+        unique_questions = list(dict.fromkeys(related_questions))
+        return unique_questions[:limit]
 
     def validate_data(self) -> Dict:
         issues = []
