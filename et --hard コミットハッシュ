@@ -1,0 +1,16 @@
+[33m76fdec2[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Update README.md
+[33m8ee9f38[m Update README.md
+[33me3c67eb[m Create README.md
+[33m183e8f6[m feat keio_qa_dataset.jsonの回答内容を改善し、詳細情報を追加(OREOの文に)
+[33md234ee5[m feat アプリケーションの初期化、チャット履歴管理、エラーハンドリングを追加し、WEBページのデザインを改善
+[33mb73be79[m Merge branch 'main' of https://github.com/HM-9999/Artificial-Intelligence
+[33mcf0f243[m feat モデルのダウンロードスクリプトを追加し、依存関係ファイルを作成
+[33m14a601d[m feat 回答表示の改善と検索機能の強化（類義語拡張、ベクトル化による類似質問検索）
+[33md5648dd[m feat 初期となるAIモデルを作成（回答候補のみ）
+[33m90a5373[m feat APIを更新 GPT 4-o
+[33m7d52d10[m feat webページの初期
+[33mf7fdec2[m change 元のデザインに変更
+[33m4c6f0c0[m feat webデザインの変更
+[33maa897d4[m style　JSONファイルから読み込む駅式に変更
+[33m8cbd550[m add モデル名の追加
+[33me0ba8a9[m feat 初期段階のプロトタイプを作成

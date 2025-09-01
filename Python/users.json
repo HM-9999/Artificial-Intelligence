@@ -1,0 +1,5 @@
+{
+    "user": {
+        "password": "scrypt:32768:8:1$WJrXIRp6qTlfn646$0720aeb9045afbc3f5f977e175b435ced520e2a07d9e21aabcabdb7b0f844f88b966aaad48215a6cf98c35bf2c9a78e1f9266054725705ca1be58f18c262a324"
+    }
+}

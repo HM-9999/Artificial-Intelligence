@@ -26,12 +26,7 @@ SYNONYM_DICT = {
     "食堂": ["食堂", "カフェテリア", "学食"],
     "体育": ["体育", "スポーツ", "運動"],
     "文化祭": ["文化祭", "学園祭", "イベント"],
-    "サークル": ["サークル", "部活", "クラブ"],
-    "ゼミ": ["ゼミナール", "ゼミ", "演習"],
-    "卒業": ["卒業", "卒業式", "学位"],
-    "大学院": ["大学院", "修士", "博士"],
-    "理系": ["理工学部", "理系", "理科系"],
-    "文系": ["文学部", "文系", "文科系"]
+    "慶應義塾横浜初等部": ["慶應義塾横浜初等部", "初等部", "学校"],
 }
 
 def preprocess_text(text: str) -> str:
@@ -54,8 +49,8 @@ def expand_words(words, synonym_dict):
             expanded.update(synonym_dict[word])
     return list(expanded)
 
-class KeioQAAnalyzer:
-    def __init__(self, data_file: str = "keio_qa_dataset.json"):
+class KyesTriviaAIAnalyzer:
+    def __init__(self, data_file: str = "kyes_trivia_dataset.json"):
         self.data_file = data_file
         self.qa_data = []
         self.meta_info = {}
@@ -70,8 +65,9 @@ class KeioQAAnalyzer:
         try:
             with open(self.data_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                self.qa_data = data.get('qa_pairs', [])
-                self.meta_info = data.get('meta', {})
+                # JSONデータはリスト形式なので、直接代入する
+                self.qa_data = data
+                self.meta_info = {}
             print(f"データ読み込み完了: {len(self.qa_data)}件のQ&A")
         except FileNotFoundError:
             print(f"エラー: {self.data_file} が見つかりません")
@@ -235,13 +231,13 @@ class KeioQAAnalyzer:
         }
 
 def interactive_analyzer():
-    analyzer = KeioQAAnalyzer()
+    analyzer = KyesTriviaAIAnalyzer()
     
     if not analyzer.qa_data:
-        print("Q&Aデータが読み込めませんでした。keio_qa_data.json ファイルを確認してください。")
+        print("Q&Aデータが読み込めませんでした。kyes_trivia_dataset.json ファイルを確認してください。")
         return
     
-    print("=== 慶應義塾 Q&A 分析ツール ===")
+    print("=== TYES Trivia AI 分析ツール ===")
     print("コマンド: stats, search, similar, validate, quit")
     
     while True:
@@ -286,5 +282,5 @@ def interactive_analyzer():
             print("無効なコマンドです")
 
 if __name__ == "__main__":
-    print("慶應義塾Q&A分析ツールを開始します...")
+    print("TYES Trivia AI 分析ツールを開始します...")
     interactive_analyzer()

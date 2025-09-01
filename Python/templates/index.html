@@ -1,81 +1,92 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>慶應義塾初等部 Q&A システム</title>
+    <title>KYES Trivia AI</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="chat-container">
-        <!-- ヘッダー -->
-        <div class="chat-header">
-            <h1>慶應義塾初等部 Q&A システム</h1>
-            <p>初等部について、何でもお聞きください</p>
-            <button id="clearHistory" class="clear-button">履歴をクリア</button>
-        </div>
+        <header class="chat-header">
+            <h1>KYES Trivia AI</h1>
+            <p>慶應義塾横浜初等部に関する質問にAIがお答えします</p>
+            <div class="header-controls">
+                {% if session.username %}
+                    <span class="username">ようこそ, {{ session.username }} さん</span>
+                    <a href="{{ url_for('logout') }}" class="auth-button">ログアウト</a>
+                {% endif %}
+                <button class="clear-button">チャットをクリア</button>
+            </div>
+        </header>
 
-        <!-- チャット履歴エリア -->
-        <div class="chat-messages" id="chatMessages">
-            {% if error and not chat_history %}
+        <div class="chat-messages">
+            {% if error %}
                 <div class="message error-message">
                     <div class="message-content">
-                        <h3>エラーが発生しました</h3>
-                        <p>{{ error }}</p>
+                        <p class="answer-text">{{ error }}</p>
                     </div>
                 </div>
             {% endif %}
 
-            <!-- チャット履歴の表示 -->
-            {% for conversation in chat_history %}
-                <!-- ユーザーの質問 -->
-                <div class="message user-message">
-                    <div class="message-content">
-                        <p>{{ conversation.question }}</p>
+            {% for chat in chat_history %}
+                {% if chat.question %}
+                    <div class="message user-message">
+                        <div class="message-content">
+                            <p class="answer-text">{{ chat.question }}</p>
+                        </div>
                     </div>
-                </div>
-
-                <!-- AIの回答 -->
-                <div class="message ai-message">
-                    <div class="message-content">
-                        {% if conversation.error %}
-                            <p>{{ conversation.error }}</p>
-                        {% elif conversation.answer %}
-                            <p class="answer-text">{{ conversation.answer.answer }}</p>
-                            
-                            <!-- 画像表示 -->
-                            {% if conversation.answer.get('image_url') %}
+                {% endif %}
+                
+                {% if chat.answer %}
+                    <div class="message ai-message">
+                        <div class="message-content">
+                            <div class="answer-text">{{ chat.answer.answer | safe }}</div>
+                            {% if chat.answer.image %}
                                 <div class="answer-image">
-                                    <img src="{{ conversation.answer.image_url }}" alt="回答に関連する画像" loading="lazy">
+                                    <img src="{{ url_for('static', filename='images/' + chat.answer.image) }}" alt="関連画像">
                                 </div>
                             {% endif %}
-                            
-                            {% if conversation.answer.get('category') %}
-                                <div class="answer-meta">
-                                    <span class="category">カテゴリ: {{ conversation.answer.category }}</span>
-                                </div>
-                            {% endif %}
-                        {% else %}
-                            <p>申し訳ございません。該当する回答が見つかりませんでした。<br>別の質問を試してみてください。</p>
-                        {% endif %}
+                            <div class="answer-meta">
+                                <span class="category">{{ chat.answer.category }}</span>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                {% elif chat.error %}
+                    <div class="message error-message">
+                        <div class="message-content">
+                            <p class="answer-text">{{ chat.error }}</p>
+                        </div>
+                    </div>
+                {% elif not chat.answer and not chat.error and chat.question %}
+                     <div class="message ai-message">
+                        <div class="message-content">
+                            <p class="answer-text">すみません、その質問にはお答えできません。</p>
+                        </div>
+                    </div>
+                {% endif %}
             {% endfor %}
+            <div id="typing-indicator" class="message ai-message" style="display: none;">
+                <div class="message-content">
+                     <p class="answer-text">考え中...</p>
+                </div>
+            </div>
         </div>
 
-        <!-- 入力エリア -->
         <div class="chat-input-container">
-            <form method="post" id="questionForm" class="chat-form">
+            <form class="chat-form" method="post">
                 <div class="input-wrapper">
                     <textarea 
-                        name="question" 
-                        id="question" 
-                        placeholder="初等部について質問してください..."
-                        required></textarea>
+                        name="question"
+                        placeholder="メッセージを入力してください..."
+                        rows="1"
+                        onkeydown="handleKeyDown(event)"
+                        oninput="autoResize(this)"
+                    ></textarea>
                     <button type="submit" class="send-button">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="m22 2-7 20-4-9-9-4Z"/>
+                            <path d="M22 2 11 13"/>
                         </svg>
                     </button>
                 </div>
@@ -84,47 +95,100 @@
     </div>
 
     <script>
-        // Enterキーでフォーム送信
-        document.getElementById('question').addEventListener('keydown', function(event) {
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+        }
+
+        function handleKeyDown(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
-                document.getElementById('questionForm').submit();
+                sendMessage();
             }
+        }
+
+        document.querySelector('.chat-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            sendMessage();
         });
 
-        // ページ読み込み時にテキストエリアにフォーカス
+        function sendMessage() {
+            const form = document.querySelector('.chat-form');
+            const input = form.querySelector('textarea[name="question"]');
+            const question = input.value.trim();
+
+            if (!question) return;
+
+            // ユーザーの質問をチャットに追加
+            addMessage(question, 'user');
+            input.value = '';
+            autoResize(input);
+
+            // タイピングインジケーターを表示
+            document.getElementById('typing-indicator').style.display = 'flex';
+
+            fetch('/ask', {
+                method: 'POST',
+                body: new FormData(form)
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('typing-indicator').style.display = 'none';
+                if (data.answer) {
+                    addMessage(data.answer, 'ai');
+                } else if (data.error) {
+                    addMessage({ answer: data.error, category: 'エラー' }, 'ai');
+                }
+            })
+            .catch(error => {
+                document.getElementById('typing-indicator').style.display = 'none';
+                addMessage({ answer: 'エラーが発生しました。', category: 'エラー' }, 'ai');
+            });
+        }
+
+        function addMessage(content, type) {
+            const chatMessages = document.querySelector('.chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+
+            let html = '';
+            if (type === 'user') {
+                html = `
+                    <div class="message-content">
+                        <p class="answer-text">${content}</p>
+                    </div>`;
+            } else { // AI or error
+                html = `
+                    <div class="message-content">
+                        <div class="answer-text">${content.answer.replace(/\n/g, '<br>')}</div>
+                        <div class="answer-meta">
+                            <span class="category">${content.category}</span>
+                        </div>
+                    </div>`;
+            }
+            messageDiv.innerHTML = html;
+
+            // インジケーターの前に挿入
+            const indicator = document.getElementById('typing-indicator');
+            chatMessages.insertBefore(messageDiv, indicator);
+
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
         window.addEventListener('load', function() {
-            document.getElementById('question').focus();
-            
-            // チャット履歴を最下部にスクロール
-            const chatMessages = document.getElementById('chatMessages');
+            const chatMessages = document.querySelector('.chat-messages');
             chatMessages.scrollTop = chatMessages.scrollHeight;
         });
 
-        // フォーム送信後に自動スクロール
-        document.getElementById('questionForm').addEventListener('submit', function() {
-            setTimeout(function() {
-                const chatMessages = document.getElementById('chatMessages');
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }, 100);
-        });
-
-        // 履歴クリア機能
-        document.getElementById('clearHistory').addEventListener('click', function() {
-            if (confirm('チャット履歴をすべて削除しますか？')) {
-                fetch('/clear', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                }).then(response => response.json())
+        document.querySelector('.clear-button').addEventListener('click', function() {
+            fetch('/clear', { method: 'POST' })
+                .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        location.reload();
+                        window.location.reload();
                     }
                 });
-            }
         });
     </script>
 </body>
-</html> 
+</html>

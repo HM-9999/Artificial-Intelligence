@@ -1,22 +1,41 @@
-from flask import Flask, request, render_template, session
-from keio_qa_analyzer import KeioQAAnalyzer
+from flask import Flask, request, render_template, session, redirect, url_for, flash
+from kyes_trivia_ai_analyzer import KyesTriviaAIAnalyzer
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import uuid
+import json
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = 'keio_qa_system_secret_key_2024'  # セッション管理用の秘密鍵
+app.secret_key = 'kyes_trivia_system_secret_key_2024'  # セッション管理用の秘密鍵
+
+USER_FILE = 'users.json'
+
+def load_users():
+    if not os.path.exists(USER_FILE):
+        return {}
+    try:
+        with open(USER_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, FileNotFoundError):
+        return {}
+
+def save_users(users):
+    with open(USER_FILE, 'w', encoding='utf-8') as f:
+        json.dump(users, f, indent=4, ensure_ascii=False)
 
 # アプリケーション初期化
 def initialize_app():
     """アプリケーションの初期化"""
     try:
-        print("慶應義塾 Q&A システムを起動中...")
+        print("KyesTrivia_AIを起動中...")
         
         # 必要なファイルの存在確認
         required_files = [
-            'keio_qa_dataset.json',
+            'kyes_trivia_dataset.json',
             'templates/index.html',
+            'templates/login.html',
+            'templates/register.html',
             'static/style.css'
         ]
         
@@ -30,7 +49,7 @@ def initialize_app():
             return None
         
         # アナライザーの初期化
-        analyzer = KeioQAAnalyzer()
+        analyzer = KyesTriviaAIAnalyzer()
         
         if not analyzer.qa_data:
             print("Q&Aデータの読み込みに失敗しました")
@@ -73,11 +92,21 @@ def add_to_chat_history(question, answer, error=None):
     
     session['chat_history'] = chat_history
 
-@app.route("/", methods=["GET", "POST"])
+@app.route('/')
+def root():
+    if 'user_id' in session:
+        return redirect('/chat')
+    return redirect(url_for('login'))
+
+@app.route('/chat', methods=["GET", "POST"])
 def index():
-    """メインページ"""
+    """メインページ（チャット）"""
     global analyzer
     
+    if 'user_id' not in session:
+        flash('チャットを利用するにはログインが必要です。')
+        return redirect(url_for('login'))
+
     # アナライザーが初期化されていない場合
     if analyzer is None:
         return render_template('index.html', 
@@ -118,6 +147,58 @@ def index():
                          chat_history=chat_history,
                          error=error)
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """ログインページ"""
+    if 'user_id' in session:
+        return redirect('/chat')
+
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        users = load_users()
+
+        if username in users and check_password_hash(users[username]['password'], password):
+            session['user_id'] = username
+            session['username'] = username
+            flash('ログインしました。')
+            return redirect('/chat')
+        else:
+            flash('ユーザー名またはパスワードが正しくありません。', 'error')
+
+    return render_template('login.html')
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    """登録ページ"""
+    if 'user_id' in session:
+        return redirect('/chat')
+
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        users = load_users()
+
+        if not username or not password:
+            flash('ユーザー名とパスワードを入力してください。', 'error')
+        elif username in users:
+            flash('このユーザー名は既に使用されています。', 'error')
+        elif len(password) < 8:
+            flash('パスワードは8文字以上で設定してください。', 'error')
+        else:
+            users[username] = {'password': generate_password_hash(password)}
+            save_users(users)
+            flash('登録が完了しました。ログインしてください。', 'success')
+            return redirect(url_for('login'))
+
+    return render_template('register.html')
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash('ログアウトしました。')
+    return redirect(url_for('login'))
+
 @app.route("/clear", methods=["POST"])
 def clear_history():
     """チャット履歴をクリア"""
@@ -136,7 +217,7 @@ if __name__ == "__main__":
     if analyzer is None:
         print("アプリケーションを起動できません")
         print("以下の点を確認してください:")
-        print("1. keio_qa_dataset.json が存在するか")
+        print("1. kyes_trivia_dataset.json が存在するか")
         print("2. download_model.py を実行してモデルをダウンロードしたか")
         print("3. 必要な依存関係がインストールされているか")
     else:
