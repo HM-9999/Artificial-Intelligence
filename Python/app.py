@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, session, redirect, url_for, flash
+from flask import Flask, request, render_template, session, redirect, url_for, flash, jsonify
 from kyes_trivia_ai_analyzer import KyesTriviaAIAnalyzer
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
@@ -71,7 +71,7 @@ def get_chat_history():
         session['chat_history'] = []
     return session['chat_history']
 
-def add_to_chat_history(question, answer, vectors=None):
+def add_to_chat_history(question, answer):
     """チャット履歴に追加"""
     chat_history = get_chat_history()
     
@@ -80,8 +80,7 @@ def add_to_chat_history(question, answer, vectors=None):
         'id': str(uuid.uuid4()),
         'timestamp': datetime.now().isoformat(),
         'question': question,
-        'answer': answer,
-        'vectors': vectors or {}
+        'answer': answer
     }
     
     chat_history.append(conversation)
@@ -139,22 +138,25 @@ def index():
                     if similar:
                         current_answer_text = similar[0][0]['answer']
                 
-                # 単語ベクトルを生成
-                raw_vectors = analyzer.vectorize_words(current_question)
-                # JSONシリアライズ可能な形式に変換
-                vectors = {word: vec.tolist() for word, vec in raw_vectors.items()}
-
                 # チャット履歴に追加
-                add_to_chat_history(current_question, current_answer_text, vectors)
+                add_to_chat_history(current_question, current_answer_text)
+                
+                # フロントエンドに返すJSONを作成
+                return jsonify({
+                    'answer': current_answer_text
+                })
                 
             except Exception as e:
                 error_message = f"検索中にエラーが発生しました: {str(e)}"
-                flash(error_message, 'error')
+                print(f"!!! エラー発生: {error_message}")
+                import traceback
+                traceback.print_exc()
                 # エラーが発生した場合も、ユーザーの質問を履歴に追加
                 add_to_chat_history(current_question, "エラーが発生しました。詳細は管理者にご確認ください。")
+                return jsonify({'error': 'サーバーでエラーが発生しました。'}), 500
 
-    # セッションからチャット履歴を取得
-    chat_history = session.get('chat_history', [])
+    # GETリクエストの場合、またはPOSTで質問がない場合はページを普通に表示
+    chat_history = get_chat_history()
     
     return render_template('index.html', 
                          chat_history=chat_history,

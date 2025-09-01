@@ -164,6 +164,30 @@ class KyesTriviaAIAnalyzer:
         results = [(self.qa_data[i], float(similarities[i])) for i in top_idx if similarities[i] >= threshold]
         return results
 
+    def vectorize_words(self, text: str) -> Dict[str, np.ndarray]:
+        """
+        文章を単語に分割し、各単語をベクトル化する。
+        """
+        if not self.model:
+            print("モデルが読み込まれていません。")
+            return {}
+        
+        # テキストの前処理と単語分割
+        processed_text = preprocess_text(text)
+        words = tokenize(processed_text)
+        
+        if not words:
+            return {}
+        
+        # 重複を除いた単語リストでベクトル化
+        unique_words = list(set(words))
+        word_embeddings = self.model.encode(unique_words, convert_to_numpy=True)
+        
+        # 単語とベクトルのマッピングを作成
+        vector_dict = {word: vec for word, vec in zip(unique_words, word_embeddings)}
+        
+        return vector_dict
+
     def get_basic_stats(self) -> Dict:
         if not self.qa_data:
             return {"error": "データがありません"}
@@ -238,7 +262,7 @@ def interactive_analyzer():
         return
     
     print("=== TYES Trivia AI 分析ツール ===")
-    print("コマンド: stats, search, similar, validate, quit")
+    print("コマンド: stats, search, similar, vectorize, validate, quit")
     
     while True:
         command = input("\nコマンドを入力: ").strip().lower()
@@ -269,6 +293,18 @@ def interactive_analyzer():
             for qa, similarity in similar:
                 print(f"類似度 {similarity:.3f}: {qa['question']}")
         
+        elif command == 'vectorize':
+            text = input("ベクトル化したい文章: ")
+            vectors = analyzer.vectorize_words(text)
+            if vectors:
+                print("\n単語ベクトル (最初の5件):")
+                for i, (word, vector) in enumerate(vectors.items()):
+                    if i >= 5:
+                        break
+                    print(f"  - {word}: [ベクトル次元: {vector.shape}] - {vector[:4]}...")
+            else:
+                print("ベクトルを生成できませんでした。")
+
         elif command == 'validate':
             validation = analyzer.validate_data()
             print(f"\nデータ品質スコア: {validation['quality_score']}/100")

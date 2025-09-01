@@ -473,3 +473,32 @@ textarea::placeholder {
     font-weight: bold;
     font-size: 14px;
 }
+
+.vector-details {
+    margin-top: 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+.vector-details summary {
+    padding: 8px 12px;
+    font-weight: bold;
+    cursor: pointer;
+    outline: none;
+}
+
+.vector-content {
+    padding: 0 12px 12px;
+    font-size: 0.9em;
+}
+
+.vector-content ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.vector-content li {
+    margin-bottom: 4px;
+    color: #555;
+}

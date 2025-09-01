@@ -127,22 +127,26 @@
             // タイピングインジケーターを表示
             document.getElementById('typing-indicator').style.display = 'flex';
 
-            fetch('/ask', {
+            fetch('/chat', {
                 method: 'POST',
-                body: new FormData(form)
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ message: question })
             })
             .then(response => response.json())
             .then(data => {
                 document.getElementById('typing-indicator').style.display = 'none';
                 if (data.answer) {
-                    addMessage(data.answer, 'ai');
+                    addMessage(data, 'ai'); // データオブジェクト全体を渡す
                 } else if (data.error) {
-                    addMessage({ answer: data.error, category: 'エラー' }, 'ai');
+                    addMessage({ answer: data.error, vectors: {} }, 'ai');
                 }
             })
             .catch(error => {
                 document.getElementById('typing-indicator').style.display = 'none';
-                addMessage({ answer: 'エラーが発生しました。', category: 'エラー' }, 'ai');
+                addMessage({ answer: 'フロントエンドでエラーが発生しました。', vectors: {} }, 'ai');
+                console.error('Fetch Error:', error);
             });
         }
 
@@ -161,9 +165,6 @@
                 html = `
                     <div class="message-content">
                         <div class="answer-text">${content.answer.replace(/\n/g, '<br>')}</div>
-                        <div class="answer-meta">
-                            <span class="category">${content.category}</span>
-                        </div>
                     </div>`;
             }
             messageDiv.innerHTML = html;
