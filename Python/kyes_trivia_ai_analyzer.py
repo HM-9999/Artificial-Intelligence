@@ -52,6 +52,7 @@ def expand_words(words, synonym_dict):
 class KyesTriviaAIAnalyzer:
     def __init__(self, data_file: str = "kyes_trivia_ai_dataset.json"):
         self.data_file = data_file
+        self.embedding_cache_file = "question_embeddings.npy"
         self.qa_data = []
         self.meta_info = {}
         self.load_data()
@@ -59,7 +60,7 @@ class KyesTriviaAIAnalyzer:
         self.model = load_model()
         if self.model is None:
             raise RuntimeError("モデルの読み込みに失敗しました。download_model.pyを実行してください。")
-        self.question_embeddings = self._embed_all_questions()
+        self.question_embeddings = self._load_or_create_embeddings()
         self.unanswered_file = os.path.join(os.path.dirname(__file__), 'unanswered_questions.json')
         self.tokenizer = Tokenizer()
         self.sentiment_dict = self._load_sentiment_dict()
@@ -93,6 +94,24 @@ class KyesTriviaAIAnalyzer:
             print(f"JSONファイル読み込みエラー: {e}")
             self.qa_data = []
             self.meta_info = {}
+
+    def _load_or_create_embeddings(self):
+        """キャッシュされたベクトルデータを読み込むか、存在しない場合は新規作成する"""
+        cache_exists = os.path.exists(self.embedding_cache_file)
+        if cache_exists:
+            dataset_last_modified = os.path.getmtime(self.data_file)
+            cache_last_modified = os.path.getmtime(self.embedding_cache_file)
+            if cache_last_modified > dataset_last_modified:
+                print("キャッシュからベクトルデータを読み込み中...")
+                embeddings = np.load(self.embedding_cache_file)
+                print("ベクトルデータの読み込み完了。")
+                return embeddings
+
+        print("ベクトルデータのキャッシュが見つからないか、古いため再生成します。")
+        embeddings = self._embed_all_questions()
+        np.save(self.embedding_cache_file, embeddings)
+        print(f"ベクトルデータを '{self.embedding_cache_file}' に保存しました。")
+        return embeddings
 
     def _embed_all_questions(self):
         if not self.qa_data:
