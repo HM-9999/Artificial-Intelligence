@@ -121,6 +121,20 @@ def index():
             try:
                 # 感情分析を実行
                 sentiment_scores = analyzer.analyze_sentiment(current_question)
+                
+                # 応答メッセージを感情に基づいて生成
+                if sentiment_scores['compound'] > 0.3:
+                    # ポジティブな感情
+                    response_intro = "ご質問ありがとうございます！喜んでお答えしますね。"
+                    follow_up_q = "他にも何か知りたいことはありますか？もっと楽しい情報がたくさんありますよ！"
+                elif sentiment_scores['compound'] < -0.3:
+                    # ネガティブな感情
+                    response_intro = "ご質問いただきありがとうございます。真摯にお答えいたします。"
+                    follow_up_q = "その他、何かお困りのことや、お知りになりたいことはございますでしょうか？"
+                else:
+                    # 中立的な感情
+                    response_intro = ""
+                    follow_up_q = "他に何か質問はありますか？"
 
                 # チャット履歴で類似質問をチェック
                 for chat in reversed(chat_history):
@@ -155,22 +169,20 @@ def index():
                         learned_new_question = True
                         current_answer_text = "ご質問ありがとうございます。関連する回答が見つかりませんでした。この質問を学習し、次回から回答できるように改善します。"
 
-                # 感情スコアに基づいて回答を調整
-                if sentiment_scores['compound'] > 0.5:
-                    current_answer_text += "\n\nお役に立てて嬉しいです！"
-                elif sentiment_scores['compound'] < -0.3:
-                    current_answer_text += "\n\nご満足いただける回答ではなかったかもしれません。もしよろしければ、別の言葉で質問してみてください。"
+                # 感情を考慮して最終的な回答を作成
+                final_answer = f"{response_intro} {current_answer_text}".strip()
 
                 # 次の質問を予測
                 predicted_questions = analyzer.predict_next_questions(current_question)
 
                 # チャット履歴に追加
-                add_to_chat_history(current_question, current_answer_text, learned_new_question)
+                add_to_chat_history(current_question, final_answer, learned_new_question)
 
                 # フロントエンドに返すJSONを作成
                 return jsonify({
                     'question': current_question,
-                    'answer': current_answer_text,
+                    'answer': final_answer,
+                    'follow_up': follow_up_q,
                     'predicted_questions': predicted_questions,
                     'learned': learned_new_question,
                     'sentiment': sentiment_scores
