@@ -6,7 +6,6 @@ import re
 from typing import List, Dict, Optional, Tuple
 from sentence_transformers import SentenceTransformer, util
 from janome.tokenizer import Tokenizer
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import numpy as np
 from download_model import load_model
 
@@ -62,7 +61,21 @@ class KyesTriviaAIAnalyzer:
             raise RuntimeError("モデルの読み込みに失敗しました。download_model.pyを実行してください。")
         self.question_embeddings = self._embed_all_questions()
         self.unanswered_file = os.path.join(os.path.dirname(__file__), 'unanswered_questions.json')
-        self.sentiment_analyzer = SentimentIntensityAnalyzer()
+        self.tokenizer = Tokenizer()
+        self.sentiment_dict = self._load_sentiment_dict()
+
+    def _load_sentiment_dict(self):
+        """簡易的な日本語感情辞書をロードする"""
+        # 出典: 日本語評価極性辞書 (http://www.cl.ecei.tohoku.ac.jp/index.php?Open%20Resources%2FJapanese%20Sentiment%20Polarity%20Dictionary)
+        # 実際のアプリケーションでは、より包括的な辞書を使用することを推奨
+        return {
+            # ポジティブ
+            "良い": 1, "嬉しい": 1, "楽しい": 1, "好き": 1, "すごい": 1, "素晴らしい": 1, 
+            "最高": 1, "満足": 1, "感謝": 1, "希望": 1, "安心": 1, "面白い": 1,
+            # ネガティブ
+            "悪い": -1, "悲しい": -1, "嫌い": -1, "ひどい": -1, "残念": -1, "不安": -1,
+            "問題": -1, "難しい": -1, "面倒": -1, "大変": -1, "怒り": -1, "失敗": -1
+        }
 
     def load_data(self):
         try:
@@ -191,9 +204,39 @@ class KyesTriviaAIAnalyzer:
         
         return vector_dict
 
-    def analyze_sentiment(self, text):
-        """テキストの感情を分析する"""
-        return self.sentiment_analyzer.polarity_scores(text)
+    def analyze_sentiment(self, text: str) -> Dict[str, float]:
+        """テキストの感情をJanomeと簡易辞書で分析する"""
+        pos_score = 0
+        neg_score = 0
+        word_count = 0
+
+        for token in self.tokenizer.tokenize(text):
+            word_count += 1
+            base_form = token.base_form
+            if base_form in self.sentiment_dict:
+                score = self.sentiment_dict[base_form]
+                if score > 0:
+                    pos_score += score
+                else:
+                    neg_score += abs(score)
+        
+        total = pos_score + neg_score
+        if total == 0:
+            return {"pos": 0.0, "neg": 0.0, "neu": 1.0, "compound": 0.0}
+
+        pos_ratio = pos_score / total
+        neg_ratio = neg_score / total
+        neu_ratio = 1.0 - (pos_ratio + neg_ratio)
+
+        # compoundスコアを -1 から 1 の範囲で簡易的に計算
+        compound = (pos_score - neg_score) / total
+
+        return {
+            "pos": round(pos_ratio, 3),
+            "neg": round(neg_ratio, 3),
+            "neu": round(max(0, neu_ratio), 3), # 念のため0未満にならないように
+            "compound": round(compound, 3)
+        }
 
     def get_basic_stats(self) -> Dict:
         if not self.qa_data:
