@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = 'kyes_trivia_system_secret_key_2024'  # セッション管理用の秘密鍵
+app.secret_key = 'kyes_trivia_system_secret_key_2025'  # セッション管理用
 
 USER_FILE = 'users.json'
 
@@ -32,7 +32,7 @@ def initialize_app():
         
         # 必要なファイルの存在確認
         required_files = [
-            'kyes_trivia_dataset.json',
+            'kyes_trivia_ai_dataset.json',
             'templates/index.html',
             'templates/login.html',
             'templates/register.html',
@@ -119,15 +119,22 @@ def index():
 
         if current_question:
             try:
+                # 感情分析を実行
+                sentiment_scores = analyzer.analyze_sentiment(current_question)
+
                 # チャット履歴で類似質問をチェック
                 for chat in reversed(chat_history):
                     similarity = analyzer.get_similarity(current_question, chat['question'])
                     if similarity > 0.9:
+                        answer = f"「{chat['question']}」という類似のご質問に先ほど回答しました。ご確認いただけますか？"
+                        if sentiment_scores['compound'] > 0.5:
+                            answer += "\n\n何か他にお困りごとはありますか？"
                         return jsonify({
                             'question': current_question,
-                            'answer': f"「{chat['question']}」という類似のご質問に先ほど回答しました。ご確認いただけますか？",
+                            'answer': answer,
                             'predicted_questions': [],
-                            'learned': False
+                            'learned': False,
+                            'sentiment': sentiment_scores
                         })
 
                 current_answer_text = None
@@ -148,6 +155,12 @@ def index():
                         learned_new_question = True
                         current_answer_text = "ご質問ありがとうございます。関連する回答が見つかりませんでした。この質問を学習し、次回から回答できるように改善します。"
 
+                # 感情スコアに基づいて回答を調整
+                if sentiment_scores['compound'] > 0.5:
+                    current_answer_text += "\n\nお役に立てて嬉しいです！"
+                elif sentiment_scores['compound'] < -0.3:
+                    current_answer_text += "\n\nご満足いただける回答ではなかったかもしれません。もしよろしければ、別の言葉で質問してみてください。"
+
                 # 次の質問を予測
                 predicted_questions = analyzer.predict_next_questions(current_question)
 
@@ -159,7 +172,8 @@ def index():
                     'question': current_question,
                     'answer': current_answer_text,
                     'predicted_questions': predicted_questions,
-                    'learned': learned_new_question
+                    'learned': learned_new_question,
+                    'sentiment': sentiment_scores
                 })
 
             except Exception as e:

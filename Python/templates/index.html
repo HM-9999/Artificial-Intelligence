@@ -117,11 +117,18 @@
                 // ユーザーの質問とAIの回答をまとめて追加
                 let messagesHtml = '';
 
+                // 感情分析のHTMLを生成
+                let sentimentHtml = '';
+                if (data.sentiment) {
+                    sentimentHtml = createSentimentHtml(data.sentiment);
+                }
+
                 // ユーザーの質問
                 messagesHtml += `
                     <div class="message user-message">
                         <div class="message-content">
                             <p>${question}</p>
+                            ${sentimentHtml}
                         </div>
                     </div>`;
 
@@ -176,6 +183,24 @@
                 chatMessages.scrollTop = chatMessages.scrollHeight;
                 console.error('Error:', error);
             });
+        }
+
+        function createSentimentHtml(sentiment) {
+            if (!sentiment) return '';
+
+            const pos = (sentiment.pos * 100).toFixed(1);
+            const neu = (sentiment.neu * 100).toFixed(1);
+            const neg = (sentiment.neg * 100).toFixed(1);
+
+            return `
+                <div class="sentiment-analysis">
+                    <div class="sentiment-bar-container">
+                        <div class="sentiment-bar positive" style="width: ${pos}%;" title="Positive: ${pos}%"></div>
+                        <div class="sentiment-bar neutral" style="width: ${neu}%;" title="Neutral: ${neu}%"></div>
+                        <div class="sentiment-bar negative" style="width: ${neg}%;" title="Negative: ${neg}%"></div>
+                    </div>
+                </div>
+            `;
         }
 
         function displaySuggestedQuestions(questions) {

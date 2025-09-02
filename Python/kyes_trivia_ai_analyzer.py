@@ -5,8 +5,9 @@ from datetime import datetime
 import re
 from typing import List, Dict, Optional, Tuple
 from sentence_transformers import SentenceTransformer, util
-import numpy as np
 from janome.tokenizer import Tokenizer
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+import numpy as np
 from download_model import load_model
 
 # 類義語・関連語の辞書
@@ -50,7 +51,7 @@ def expand_words(words, synonym_dict):
     return list(expanded)
 
 class KyesTriviaAIAnalyzer:
-    def __init__(self, data_file: str = "kyes_trivia_dataset.json"):
+    def __init__(self, data_file: str = "kyes_trivia_ai_dataset.json"):
         self.data_file = data_file
         self.qa_data = []
         self.meta_info = {}
@@ -61,6 +62,7 @@ class KyesTriviaAIAnalyzer:
             raise RuntimeError("モデルの読み込みに失敗しました。download_model.pyを実行してください。")
         self.question_embeddings = self._embed_all_questions()
         self.unanswered_file = os.path.join(os.path.dirname(__file__), 'unanswered_questions.json')
+        self.sentiment_analyzer = SentimentIntensityAnalyzer()
 
     def load_data(self):
         try:
@@ -189,6 +191,10 @@ class KyesTriviaAIAnalyzer:
         
         return vector_dict
 
+    def analyze_sentiment(self, text):
+        """テキストの感情を分析する"""
+        return self.sentiment_analyzer.polarity_scores(text)
+
     def get_basic_stats(self) -> Dict:
         if not self.qa_data:
             return {"error": "データがありません"}
@@ -304,7 +310,7 @@ def interactive_analyzer():
     analyzer = KyesTriviaAIAnalyzer()
     
     if not analyzer.qa_data:
-        print("Q&Aデータが読み込めませんでした。kyes_trivia_dataset.json ファイルを確認してください。")
+        print("Q&Aデータが読み込めませんでした。kyes_trivia_ai_dataset.json ファイルを確認してください。")
         return
     
     print("=== TYES Trivia AI 分析ツール ===")
@@ -359,6 +365,15 @@ def interactive_analyzer():
                 print("問題:")
                 for issue in validation['issues'][:10]:
                     print(f"  - {issue}")
+        
+        elif command == 'sentiment':
+            text = input("感情を分析したい文章: ")
+            sentiment = analyzer.analyze_sentiment(text)
+            print(f"\n感情分析結果:")
+            print(f"  - 正の感情: {sentiment['pos']:.3f}")
+            print(f"  - 負の感情: {sentiment['neg']:.3f}")
+            print(f"  - 中立の感情: {sentiment['neu']:.3f}")
+            print(f"  - 合計スコア: {sentiment['compound']:.3f}")
         
         else:
             print("無効なコマンドです")
