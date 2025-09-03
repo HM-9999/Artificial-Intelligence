@@ -59,7 +59,7 @@ def initialize_app():
         try:
             generated_count = analyzer.generate_answers_for_unanswered()
             if generated_count > 0:
-                print(f"*** {generated_count}件の新しいQ&Aを自動生成しました ***")
+                print(f"{generated_count}件の新しいQ&Aを自動生成しました")
         except Exception as e:
             print(f"回答の自動生成中にエラーが発生しました: {e}")
         
@@ -87,7 +87,7 @@ def clear_chat_history():
 @app.route('/')
 def root():
     if 'user_id' in session:
-        return redirect('/chat')
+        return redirect(url_for('index'))
     return redirect(url_for('login'))
 
 @app.route('/chat', methods=["GET", "POST"])
@@ -113,7 +113,7 @@ def index():
         # JSONリクエストとフォームリクエストの両方に対応
         if request.is_json:
             data = request.get_json()
-            current_question = data.get('message', '').strip()
+            current_question = data.get('question', '').strip()
         else:
             current_question = request.form.get("question", "").strip()
 
@@ -190,7 +190,7 @@ def index():
 
             except Exception as e:
                 error_message = f"検索中にエラーが発生しました: {str(e)}"
-                print(f"!!! エラー発生: {error_message}")
+                print(f"!s!! エラー発生: {error_message}")
                 import traceback
                 traceback.print_exc()
                 # エラーが発生した場合も、ユーザーの質問を履歴に追加
@@ -198,15 +198,38 @@ def index():
                 return jsonify({'error': 'サーバーでエラーが発生しました。'}), 500
 
     # GETリクエストの場合、またはPOSTで質問がない場合はページを普通に表示
+    initial_questions_by_category = {}
+    if not chat_history:
+        initial_questions_by_category = {
+            "学校生活": [
+                "忘れ物をした場合、どうすればいいですか？",
+                "校章のデザインにはどんな意味がありますか？",
+                "食堂のメニューについて教えてください。",
+            ],
+            "季節の行事": [
+                "一番楽しいイベントは何ですか？",
+                "文化祭はいつですか？",
+                "体育祭の種目を教えてください。",
+            ],
+            "授業について": [
+                "福澤諭吉先生の教えについて教えてください。",
+                "履修登録はどのように行いますか？",
+                "おすすめの選択科目はありますか？",
+            ]
+        }
+
+    has_history = len(chat_history) > 0
     return render_template('index.html', 
-                         chat_history=chat_history,
-                         error=error)
+                           chat_history=chat_history,
+                           initial_questions_by_category=initial_questions_by_category,
+                           has_history=has_history,
+                           error=error)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """ログインページ"""
     if 'user_id' in session:
-        return redirect('/chat')
+        return redirect(url_for('index'))
 
     if request.method == 'POST':
         username = request.form.get('username')
@@ -217,7 +240,7 @@ def login():
             session['user_id'] = username
             session['username'] = username
             flash('ログインしました。')
-            return redirect('/chat')
+            return redirect(url_for('index'))
         else:
             flash('ユーザー名またはパスワードが正しくありません。', 'error')
 
@@ -227,7 +250,7 @@ def login():
 def register():
     """登録ページ"""
     if 'user_id' in session:
-        return redirect('/chat')
+        return redirect(url_for('index'))
 
     if request.method == 'POST':
         username = request.form.get('username')

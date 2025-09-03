@@ -7,48 +7,18 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="chat-container">
-        <header class="chat-header">
-            <h1>KYES Trivia AI</h1>
-            <p>慶應義塾横浜初等部に関する質問にAIがお答えします</p>
-            <div class="header-controls">
-                {% if session.username %}
-                    <span class="username">ようこそ, {{ session.username }} さん</span>
-                    <a href="{{ url_for('logout') }}" class="auth-button">ログアウト</a>
+    <div id="prompt-view" class="prompt-container">
+        <div class="welcome-message">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="KYES Trivia AI Logo" class="logo-main">
+            <h1>
+                {% if session['username'] %}
+                    {{ session['username'] | upper }}さん、
                 {% endif %}
-                <button class="clear-button">チャットをクリア</button>
-            </div>
-        </header>
-
-        <div class="chat-messages">
-            {% for chat in chat_history %}
-                <div class="message user-message">
-                    <div class="message-content">
-                        <p>{{ chat.question }}</p>
-                    </div>
-                </div>
-                <div class="message ai-message">
-                    <div class="message-content">
-                        <p class="answer-text">{{ chat.answer | safe }}</p>
-                    </div>
-                </div>
-                {% if chat.learned %}
-                <div class="message system-message">
-                    <div class="message-content">
-                        <p> 新しい質問を学習しました！</p>
-                    </div>
-                </div>
-                {% endif %}
-            {% endfor %}
-            <div id="typing-indicator" class="message ai-message" style="display: none;">
-                <div class="message-content">
-                     <p class="answer-text">考え中...</p>
-                </div>
-            </div>
+                いらっしゃいませ
+            </h1>
         </div>
-
-        <div class="chat-input-container">
-            <div class="suggested-questions"></div>
+        <div class="main-prompt">
+            <p>本日はどのようなお手伝いをさせていただけますか？</p>
             <form class="chat-form" method="post">
                 <div class="input-wrapper">
                     <textarea 
@@ -66,161 +36,58 @@
                     </button>
                 </div>
             </form>
+            <div class="category-container">
+                <div class="category-buttons">
+                    <!-- Category buttons will be inserted here by JS -->
+                </div>
+                <div class="suggested-questions-container">
+                     <div class="suggested-questions"></div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <script>
-        function autoResize(textarea) {
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-        }
+    <div id="chat-view" class="chat-container" style="display: none;">
+        <header class="chat-header">
+            <h1>KYES Trivia AI</h1>
+             <div class="header-controls">
+                <a href="{{ url_for('logout') }}" class="auth-button">ログアウト</a>
+                <button class="clear-button">チャットをクリア</button>
+            </div>
+        </header>
 
-        function handleKeyDown(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        }
+        <div class="chat-messages">
+            <!-- Chat messages will be dynamically inserted here -->
+        </div>
 
-        document.querySelector('.chat-form').addEventListener('submit', function(event) {
-            event.preventDefault();
-            sendMessage();
-        });
+        <div class="chat-input-container">
+            <form class="chat-form-bottom" method="post">
+                <div class="input-wrapper">
+                    <textarea 
+                        name="question-bottom"
+                        placeholder="メッセージを入力してください..."
+                        rows="1"
+                        onkeydown="handleKeyDown(event)"
+                        oninput="autoResize(this)"
+                    ></textarea>
+                    <button type="submit" class="send-button">
+                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="m22 2-7 20-4-9-9-4Z"/>
+                            <path d="M22 2 11 13"/>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-        function sendMessage() {
-            const input = document.querySelector('textarea[name="question"]');
-            const question = input.value.trim();
-            if (question === '') return;
-
-            const chatMessages = document.querySelector('.chat-messages');
-            
-            // 入力欄をクリアし、サジェストを消す
-            input.value = '';
-            autoResize(input);
-            clearSuggestedQuestions();
-
-            // タイピングインジケーターを表示
-            document.getElementById('typing-indicator').style.display = 'flex';
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-
-            fetch('/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ message: question })
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('typing-indicator').style.display = 'none';
-
-                // ユーザーの質問とAIの回答をまとめて追加
-                let messagesHtml = '';
-
-                // ユーザーの質問
-                messagesHtml += `
-                    <div class="message user-message">
-                        <div class="message-content">
-                            <p>${question}</p>
-                        </div>
-                    </div>`;
-
-                // AIの回答
-                if (data.answer) {
-                    let answerText = data.answer.replace(/\n/g, '<br>');
-                    
-                    // フォローアップの質問があれば追記
-                    if (data.follow_up) {
-                        answerText += `<br><br><p class="follow-up">${data.follow_up}</p>`;
-                    }
-
-                    const answerHtml = `
-                        <div class="message ai-message">
-                            <div class="message-content">
-                                <p class="answer-text">${answerText}</p>
-                            </div>
-                        </div>`;
-                    messagesHtml += answerHtml;
-                    
-                    if (data.learned) {
-                        messagesHtml += `
-                        <div class="message system-message">
-                            <div class="message-content">
-                                <p> 新しい質問を学習しました！</p>
-                            </div>
-                        </div>`;
-                    }
-
-                    if (data.predicted_questions && data.predicted_questions.length > 0) {
-                        displaySuggestedQuestions(data.predicted_questions);
-                    }
-                } else if (data.error) {
-                    messagesHtml += `
-                        <div class="message ai-message">
-                            <div class="message-content">
-                                <p class="answer-text">${data.error}</p>
-                            </div>
-                        </div>`;
-                }
-                
-                chatMessages.insertAdjacentHTML('beforeend', messagesHtml);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            })
-            .catch(error => {
-                document.getElementById('typing-indicator').style.display = 'none';
-                const errorHtml = `
-                    <div class="message user-message">
-                        <div class="message-content">
-                            <p>${question}</p>
-                        </div>
-                    </div>
-                    <div class="message ai-message">
-                        <div class="message-content">
-                            <p class="answer-text">エラーが発生しました。しばらくしてからもう一度お試しください。</p>
-                        </div>
-                    </div>`;
-                chatMessages.insertAdjacentHTML('beforeend', errorHtml);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-                console.error('Error:', error);
-            });
-        }
-
-
-        function displaySuggestedQuestions(questions) {
-            const container = document.querySelector('.suggested-questions');
-            clearSuggestedQuestions();
-            questions.forEach(q => {
-                const button = document.createElement('button');
-                button.className = 'suggested-question';
-                button.textContent = q;
-                button.onclick = () => {
-                    const input = document.querySelector('textarea[name="question"]');
-                    input.value = q;
-                    sendMessage();
-                };
-                container.appendChild(button);
-            });
-        }
-
-        function clearSuggestedQuestions() {
-            const container = document.querySelector('.suggested-questions');
-            container.innerHTML = '';
-        }
-
-        window.addEventListener('load', function() {
-            const chatMessages = document.querySelector('.chat-messages');
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        });
-
-        document.querySelector('.clear-button').addEventListener('click', function() {
-            fetch('/clear', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        window.location.reload();
-                    }
-                });
-        });
-    </script>
+    <div id="js-config"
+         data-has-history="{{ has_history | tojson }}"
+         data-chat-history='{{ chat_history | tojson }}'
+         data-questions-by-category='{{ initial_questions_by_category | tojson }}'
+         data-chat-url="{{ url_for('index') }}"
+         data-clear-url="{{ url_for('clear_history') }}"
+    ></div>
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>
