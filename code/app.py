@@ -5,6 +5,8 @@ import os
 import uuid
 import json
 from datetime import datetime
+import logging
+import logging
 
 app = Flask(__name__)
 app.secret_key = 'kyes_trivia_system_secret_key_2025'  # セッション管理用
@@ -55,13 +57,13 @@ def initialize_app():
             print("Q&Aデータの読み込みに失敗しました")
             return None
 
-        # 未回答の質問に回答を生成
-        try:
-            generated_count = analyzer.generate_answers_for_unanswered()
-            if generated_count > 0:
-                print(f"{generated_count}件の新しいQ&Aを自動生成しました")
-        except Exception as e:
-            print(f"回答の自動生成中にエラーが発生しました: {e}")
+        # # 未回答の質問に回答を生成 (現在この機能は無効化されています)
+        # try:
+        #     generated_count = analyzer.generate_answers_for_unanswered()
+        #     if generated_count > 0:
+        #         print(f"{generated_count}件の新しいQ&Aを自動生成しました")
+        # except Exception as e:
+        #     print(f"回答の自動生成中にエラーが発生しました: {e}")
         
         print("アプリケーションの初期化が完了しました")
         return analyzer
@@ -69,6 +71,17 @@ def initialize_app():
     except Exception as e:
         print(f"アプリケーションの初期化に失敗しました: {e}")
         return None
+
+# 質問ロガーの設定
+question_logger = logging.getLogger('user_questions')
+question_logger.setLevel(logging.INFO)
+log_file_path = os.path.join(os.path.dirname(__file__), 'user_questions.log')
+# ハンドラが重複して追加されるのを防ぐ
+if not question_logger.handlers:
+    file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
+    formatter = logging.Formatter('%(asctime)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    question_logger.addHandler(file_handler)
 
 # グローバル変数としてアナライザーを保持
 analyzer = initialize_app()
@@ -113,80 +126,31 @@ def index():
         # JSONリクエストとフォームリクエストの両方に対応
         if request.is_json:
             data = request.get_json()
-            current_question = data.get('question', '').strip()
+            current_question = data.get('question') if data else request.form.get('question')
         else:
             current_question = request.form.get("question", "").strip()
 
+        # ユーザーの質問をログに記録
+        if current_question:
+            question_logger.info(f"User question: {current_question}")
+
         if current_question:
             try:
-                # 感情分析を実行
-                sentiment_scores = analyzer.analyze_sentiment(current_question)
-                
-                # 応答メッセージを感情に基づいて生成
-                if sentiment_scores['compound'] > 0.3:
-                    # ポジティブな感情
-                    response_intro = "ご質問ありがとうございます！喜んでお答えしますね。"
-                    follow_up_q = "他にも何か知りたいことはありますか？もっと楽しい情報がたくさんありますよ！"
-                elif sentiment_scores['compound'] < -0.3:
-                    # ネガティブな感情
-                    response_intro = "ご質問いただきありがとうございます。真摯にお答えいたします。"
-                    follow_up_q = "その他、何かお困りのことや、お知りになりたいことはございますでしょうか？"
-                else:
-                    # 中立的な感情
-                    response_intro = ""
-                    follow_up_q = "他に何か質問はありますか？"
+                # AIアナライザーで応答を生成
+                response_data = analyzer.generate_response(current_question, get_chat_history())
 
-                # チャット履歴で類似質問をチェック
-                for chat in reversed(chat_history):
-                    similarity = analyzer.get_similarity(current_question, chat['question'])
-                    if similarity > 0.9:
-                        answer = f"「{chat['question']}」という類似のご質問に先ほど回答しました。ご確認いただけますか？"
-                        if sentiment_scores['compound'] > 0.5:
-                            answer += "\n\n何か他にお困りごとはありますか？"
-                        return jsonify({
-                            'question': current_question,
-                            'answer': answer,
-                            'predicted_questions': [],
-                            'learned': False,
-                            'sentiment': sentiment_scores
-                        })
-
-                current_answer_text = None
-                predicted_questions = []
-                learned_new_question = False
-
-                # キーワード検索
-                search_results = analyzer.search_qa(current_question)
-                if search_results:
-                    current_answer_text = search_results[0]['answer']
-                else:
-                    # 類似質問検索
-                    similar = analyzer.find_similar_questions(current_question)
-                    if similar:
-                        current_answer_text = similar[0][0]['answer']
-                    else:
-                        analyzer.learn_new_qa(current_question)
-                        learned_new_question = True
-                        current_answer_text = "ご質問ありがとうございます。関連する回答が見つかりませんでした。この質問を学習し、次回から回答できるように改善します。"
-
-                # 感情を考慮して最終的な回答を作成
-                final_answer = f"{response_intro} {current_answer_text}".strip()
-
-                # 次の質問を予測
-                predicted_questions = analyzer.predict_next_questions(current_question)
+                if 'error' in response_data:
+                    return jsonify(response_data), 500
 
                 # チャット履歴に追加
-                add_to_chat_history(current_question, final_answer, learned_new_question)
+                add_to_chat_history(
+                    response_data['question'], 
+                    response_data['answer'], 
+                    response_data.get('learned', False)
+                )
 
-                # フロントエンドに返すJSONを作成
-                return jsonify({
-                    'question': current_question,
-                    'answer': final_answer,
-                    'follow_up': follow_up_q,
-                    'predicted_questions': predicted_questions,
-                    'learned': learned_new_question,
-                    'sentiment': sentiment_scores
-                })
+                return jsonify(response_data)
+
 
             except Exception as e:
                 error_message = f"検索中にエラーが発生しました: {str(e)}"

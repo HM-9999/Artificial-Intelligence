@@ -342,6 +342,76 @@ class KyesTriviaAIAnalyzer:
         unique_questions = list(dict.fromkeys(related_questions))
         return unique_questions[:limit]
 
+    def generate_response(self, question: str, chat_history: list) -> Dict:
+        """質問応答を生成し、関連情報と共に辞書で返す"""
+        try:
+            # 感情分析
+            sentiment_scores = self.analyze_sentiment(question)
+
+            # 感情に基づいた応答メッセージ
+            if sentiment_scores['compound'] > 0.3:
+                response_intro = "ご質問ありがとうございます！喜んでお答えしますね。"
+                follow_up_q = "他にも何か知りたいことはありますか？もっと楽しい情報がたくさんありますよ！"
+            elif sentiment_scores['compound'] < -0.3:
+                response_intro = "ご質問いただきありがとうございます。真摯にお答えいたします。"
+                follow_up_q = "その他、何かお困りのことや、お知りになりたいことはございますでしょうか？"
+            else:
+                response_intro = ""
+                follow_up_q = "他に何か質問はありますか？"
+
+            # チャット履歴での類似質問チェック
+            for chat in reversed(chat_history):
+                similarity = self.get_similarity(question, chat['question'])
+                if similarity > 0.9:
+                    answer = f"「{chat['question']}」という類似のご質問に先ほど回答しました。ご確認いただけますか？"
+                    if sentiment_scores['compound'] > 0.5:
+                        answer += "\n\n何か他にお困りごとはありますか？"
+                    return {
+                        'question': question,
+                        'answer': answer,
+                        'predicted_questions': [],
+                        'learned': False,
+                        'sentiment': sentiment_scores,
+                        'follow_up': follow_up_q
+                    }
+
+            # 回答を検索
+            search_results = self.search_qa(question)
+            if search_results:
+                current_answer_text = search_results[0]['answer']
+                learned_new_question = False
+            else:
+                similar = self.find_similar_questions(question)
+                if similar:
+                    current_answer_text = similar[0][0]['answer']
+                    learned_new_question = False
+                else:
+                    self.learn_new_qa(question)
+                    learned_new_question = True
+                    current_answer_text = "ご質問ありがとうございます。その質問にはまだお答えできないようです。今後の学習のために質問を記録させていただきました。よろしければ、別の言葉で質問を言い換えてみてください。"
+
+            # 最終的な回答を作成
+            final_answer = f"{response_intro} {current_answer_text}".strip()
+
+            # 次の質問を予測
+            predicted_questions = self.predict_next_questions(question)
+
+            return {
+                'question': question,
+                'answer': final_answer,
+                'follow_up': follow_up_q,
+                'predicted_questions': predicted_questions,
+                'learned': learned_new_question,
+                'sentiment': sentiment_scores
+            }
+
+        except Exception as e:
+            print(f"応答生成中にエラーが発生しました: {e}")
+            import traceback
+            traceback.print_exc()
+            # エラー情報を返す
+            return {'error': 'サーバーでエラーが発生しました。'}
+
     def validate_data(self) -> Dict:
         issues = []
         

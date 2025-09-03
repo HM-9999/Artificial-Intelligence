@@ -173,6 +173,11 @@ body {
     background: #F8F7F4;
 }
 
+/* Hide empty messages */
+.message.empty {
+    display: none;
+}
+
 .message {
     display: flex;
     margin-bottom: 1.5rem;

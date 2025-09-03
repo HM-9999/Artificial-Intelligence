@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const question = input.value.trim();
         if (!question) return;
 
-        const isFirstSubmit = (form === promptForm);
+        const isFirstSubmit = !chatView.style.display || chatView.style.display === 'none';
         if (isFirstSubmit) {
             showChatView(true, question);
         } else {
@@ -121,7 +121,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             
             const data = await response.json();
-            await typeWriter(answerTextElement, data.answer);
+            if (data.answer && data.answer.trim() !== '') {
+                await typeWriter(answerTextElement, data.answer);
+            } else {
+                // If the answer is empty, add a class to hide the bubble via CSS
+                aiMessageContainer.closest('.message').classList.add('empty');
+            }
 
         } catch (error) {
             console.error('Error:', error);
