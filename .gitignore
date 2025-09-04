@@ -98,6 +98,9 @@ celerybeat.pid
 .env
 .venv
 env/
+
+# Private data files
+code/kyes_trivia_ai_dataset.json
 venv/
 ENV/
 env.bak/
