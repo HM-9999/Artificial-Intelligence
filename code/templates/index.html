@@ -12,13 +12,13 @@
             <img src="{{ url_for('static', filename='logo.png') }}" alt="KYES Trivia AI Logo" class="logo-main">
             <h1>
                 {% if session['username'] %}
-                    {{ session['username'] | upper }}さん、
+                    {{ session['username'] | upper }}　
                 {% endif %}
-                いらっしゃいませ
+                こんにちは
             </h1>
         </div>
         <div class="main-prompt">
-            <p>本日はどのようなお手伝いをさせていただけますか？</p>
+            <p>初等部について質問ありますか？</p>
             <form class="chat-form" method="post">
                 <div class="input-wrapper">
                     <textarea 
@@ -88,6 +88,13 @@
          data-chat-url="{{ url_for('index') }}"
          data-clear-url="{{ url_for('clear_history') }}"
     ></div>
+    
+    {% if is_home %}
+    <footer class="footer-credits">
+        <p>回答のデータはすべて茂木が作成しました。適切ではない回答があればすみません。</p>
+    </footer>
+    {% endif %}
+    
     <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>

@@ -305,3 +305,30 @@ textarea::placeholder {
     from, to { background-color: transparent; }
     50% { background-color: #333; }
 }
+
+/* Footer */
+.footer-credits {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    padding: 1rem 0;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-top: 1px solid #eaeaea;
+    font-size: 0.9rem;
+    color: #666;
+    z-index: 1000;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.footer-credits p {
+    margin: 0;
+    padding: 0 1rem;
+    line-height: 1.4;
+}
+
+/* Adjust chat container to avoid footer overlap */
+.chat-messages {
+    padding-bottom: 4rem; /* Add space for the fixed footer */
+}

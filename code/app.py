@@ -1,4 +1,5 @@
 from flask import Flask, request, render_template, session, redirect, url_for, flash, jsonify
+from flask_sqlalchemy import SQLAlchemy
 from kyes_trivia_ai_analyzer import KyesTriviaAIAnalyzer
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
@@ -6,9 +7,38 @@ import uuid
 import json
 from datetime import datetime
 import logging
+from pathlib import Path
+
+# データベースの初期化
+db = SQLAlchemy()
+
+# ユーザーモデル
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(120), nullable=False)
+    questions = db.relationship('UserQuestion', backref='user', lazy=True)
+
+# ユーザー質問モデル
+class UserQuestion(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    question = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 app = Flask(__name__)
 app.secret_key = 'kyes_trivia_system_secret_key_2025'  # セッション管理用
+
+# データベース設定
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///kyes_trivia.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# データベース初期化
+db.init_app(app)
+
+# データベース作成
+with app.app_context():
+    db.create_all()
 
 USER_FILE = 'users.json'
 
@@ -24,6 +54,38 @@ def load_users():
 def save_users(users):
     with open(USER_FILE, 'w', encoding='utf-8') as f:
         json.dump(users, f, indent=4, ensure_ascii=False)
+
+def save_question_to_file(username, question):
+    """ユーザーの質問をJSONファイルに保存する"""
+    try:
+        # 保存先ディレクトリがなければ作成
+        questions_dir = Path('user_questions')
+        questions_dir.mkdir(exist_ok=True)
+        
+        # ユーザーごとの質問ファイルパス
+        user_questions_file = questions_dir / f'{username}_questions.json'
+        
+        # 既存の質問を読み込む（存在する場合）
+        if user_questions_file.exists():
+            with open(user_questions_file, 'r', encoding='utf-8') as f:
+                questions = json.load(f)
+        else:
+            questions = []
+        
+        # 新しい質問を追加
+        new_question = {
+            'id': str(uuid.uuid4()),
+            'question': question,
+            'timestamp': datetime.now().isoformat()
+        }
+        questions.append(new_question)
+        
+        # ファイルに保存
+        with open(user_questions_file, 'w', encoding='utf-8') as f:
+            json.dump(questions, f, ensure_ascii=False, indent=2)
+            
+    except Exception as e:
+        print(f"質問の保存中にエラーが発生しました: {e}")
 
 # アプリケーション初期化
 def initialize_app():
@@ -133,6 +195,24 @@ def index():
         if current_question:
             question_logger.info(f"User question: {current_question}")
 
+        # ユーザーの質問をデータベースとファイルに保存
+        if current_question and 'user_id' in session:
+            username = session['user_id']
+            try:
+                # データベースに保存
+                user = User.query.filter_by(username=username).first()
+                if user:
+                    new_question = UserQuestion(question=current_question, user_id=user.id)
+                    db.session.add(new_question)
+                    db.session.commit()
+                
+                # ファイルにもバックアップとして保存
+                save_question_to_file(username, current_question)
+                    
+            except Exception as e:
+                print(f"Error saving question: {e}")
+                db.session.rollback()
+
         if current_question:
             try:
                 # AIアナライザーで応答を生成
@@ -165,7 +245,7 @@ def index():
     if not chat_history:
         initial_questions_by_category = {
             "学校生活": [
-                "忘れ物をした場合、どうすればいいですか？",
+                "どのような部活が初等部にあるの？",
                 "校章のデザインにはどんな意味がありますか？",
                 "食堂のメニューについて教えてください。",
             ],
@@ -182,10 +262,13 @@ def index():
         }
 
     has_history = len(chat_history) > 0
+    # 現在のパスがルート（/）のときのみ is_home を True に設定
+    is_home = request.path == '/'
     return render_template('index.html', 
                            chat_history=chat_history,
                            initial_questions_by_category=initial_questions_by_category,
                            has_history=has_history,
+                           is_home=is_home,
                            error=error)
 
 @app.route("/login", methods=["GET", "POST"])
@@ -197,15 +280,37 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        users = load_users()
-
-        if username in users and check_password_hash(users[username]['password'], password):
-            session['user_id'] = username
-            session['username'] = username
-            flash('ログインしました。')
-            return redirect(url_for('index'))
-        else:
-            flash('ユーザー名またはパスワードが正しくありません。', 'error')
+        
+        try:
+            # データベースからユーザーを検索
+            user = User.query.filter_by(username=username).first()
+            
+            # ユーザーが存在し、パスワードが正しいか確認
+            if user and check_password_hash(user.password_hash, password):
+                session['user_id'] = user.username
+                session['username'] = user.username
+                flash('ログインしました。')
+                return redirect(url_for('index'))
+            else:
+                # 互換性のため、古い認証方法も試す
+                users = load_users()
+                if username in users and check_password_hash(users[username]['password'], password):
+                    # 古い認証で成功した場合は、新しいデータベースにユーザーを移行
+                    hashed_password = generate_password_hash(password)
+                    new_user = User(username=username, password_hash=hashed_password)
+                    db.session.add(new_user)
+                    db.session.commit()
+                    
+                    session['user_id'] = username
+                    session['username'] = username
+                    flash('ログインしました。')
+                    return redirect(url_for('index'))
+                
+                flash('ユーザー名またはパスワードが正しくありません。', 'error')
+                
+        except Exception as e:
+            print(f"Error during login: {e}")
+            flash('ログイン中にエラーが発生しました。', 'error')
 
     return render_template('login.html')
 
@@ -227,10 +332,24 @@ def register():
         elif len(password) < 8:
             flash('パスワードは8文字以上で設定してください。', 'error')
         else:
-            users[username] = {'password': generate_password_hash(password)}
-            save_users(users)
-            flash('登録が完了しました。ログインしてください。', 'success')
-            return redirect(url_for('login'))
+            try:
+                # 新しいユーザーをデータベースに追加
+                hashed_password = generate_password_hash(password)
+                new_user = User(username=username, password_hash=hashed_password)
+                db.session.add(new_user)
+                
+                # 既存のJSONファイルにも保存（互換性のため）
+                users[username] = {'password': hashed_password}
+                save_users(users)
+                
+                db.session.commit()
+                flash('登録が完了しました。ログインしてください。', 'success')
+                return redirect(url_for('login'))
+                
+            except Exception as e:
+                db.session.rollback()
+                print(f"Error during registration: {e}")
+                flash('登録中にエラーが発生しました。', 'error')
 
     return render_template('register.html')
 
@@ -239,6 +358,36 @@ def logout():
     session.clear()
     flash('ログアウトしました。')
     return redirect(url_for('login'))
+
+@app.route('/questions')
+def show_questions():
+    """ユーザーの質問履歴を表示するページ"""
+    if 'user_id' not in session:
+        flash('このページにアクセスするにはログインが必要です。', 'error')
+        return redirect(url_for('login'))
+    
+    try:
+        # 現在のユーザーを取得
+        user = User.query.filter_by(username=session['user_id']).first()
+        if not user:
+            flash('ユーザー情報が見つかりません。', 'error')
+            return redirect(url_for('login'))
+        
+        # ユーザーの質問を新しい順に取得
+        user_questions = UserQuestion.query.filter_by(user_id=user.id).order_by(UserQuestion.timestamp.desc()).all()
+        
+        # テンプレート用にフォーマット
+        questions = [{
+            'timestamp': q.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            'question': q.question
+        } for q in user_questions]
+        
+        return render_template('questions.html', questions=questions)
+        
+    except Exception as e:
+        print(f"Error fetching questions from database: {e}")
+        flash('質問の取得中にエラーが発生しました。', 'error')
+        return redirect(url_for('index'))
 
 @app.route("/clear", methods=["POST"])
 def clear_history():
