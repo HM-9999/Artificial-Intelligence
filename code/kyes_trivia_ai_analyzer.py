@@ -103,8 +103,9 @@ class KyesTriviaAIAnalyzer:
             cache_last_modified = os.path.getmtime(self.embedding_cache_file)
             if cache_last_modified > dataset_last_modified:
                 print("キャッシュからベクトルデータを読み込み中...")
-                embeddings = np.load(self.embedding_cache_file)
-                print("ベクトルデータの読み込み完了。")
+                # メモリマップトファイルを使用してメモリ効率を向上
+                embeddings = np.load(self.embedding_cache_file, mmap_mode='r')
+                print("ベクトルデータの読み込み完了。（メモリマップトモード）")
                 return embeddings
 
         print("ベクトルデータのキャッシュが見つからないか、古いため再生成します。")

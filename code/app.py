@@ -6,7 +6,6 @@ import uuid
 import json
 from datetime import datetime
 import logging
-import logging
 
 app = Flask(__name__)
 app.secret_key = 'kyes_trivia_system_secret_key_2025'  # セッション管理用
