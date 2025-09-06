@@ -1,8 +1,6 @@
 # KYES_Trivia_AI
-こんにちはこのアプリについてです。
-
-English | [日本語](README.ja.md)
-
+こんにちは僕が作成したアプリについてです。
+Hello, this is about the app I created.
 ---
 
 A conversational AI chatbot designed to answer trivia questions based on a predefined knowledge base. This application uses a sentence-transformer model to understand natural language queries and find the most relevant answers.
