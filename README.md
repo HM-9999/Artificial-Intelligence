@@ -1,5 +1,4 @@
-# KYES_Trivia_AI
-こんにちは僕が作成したアプリについてです。
+KYES Trivia AI
 Hello, this is about the app I created.
 ---
 
